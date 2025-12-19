@@ -5,6 +5,8 @@ on:
     branches: [ dev ]
     paths:
       - 'Deployment/**'
+  # Allow manual runs from the Actions UI
+  workflow_dispatch: {}
 
 jobs:
   deploy:
@@ -18,6 +20,22 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
+      - name: "Debug: resolve Snowflake host and check login endpoint"
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+        run: |
+          set -e
+          # sanitize account value: remove scheme, path, and any .snowflakecomputing.com suffix
+          ACCOUNT_RAW="${SNOWFLAKE_ACCOUNT:-}"
+          ACCOUNT=$(echo "$ACCOUNT_RAW" | sed -E 's#^https?://##' | cut -d/ -f1 | sed -E 's/\.snowflakecomputing\.com$//')
+          HOST="${ACCOUNT}.snowflakecomputing.com"
+          echo "Sanitized account: $ACCOUNT"
+          # Show DNS resolution
+          nslookup "$HOST" || true
+          # Check HTTP status for login endpoint (no credentials sent)
+          echo "HTTP status code for login endpoint:"
+          curl -s -o /dev/null -w "%{http_code}\n" "https://$HOST/session/v1/login-request" || true
 
       - name: Install Snowflake connector
         run: |
@@ -37,9 +55,18 @@ jobs:
           set -e
           python - <<'PY'
           import os, glob
+          import re
           import snowflake.connector
 
-          account = os.environ.get('SNOWFLAKE_ACCOUNT')
+          account_raw = os.environ.get('SNOWFLAKE_ACCOUNT')
+          # Normalize account: strip scheme, path, and .snowflakecomputing.com suffix if present
+          if account_raw:
+              account = re.sub(r'^https?://', '', account_raw)
+              account = account.split('/')[0]
+              account = re.sub(r'\.snowflakecomputing\.com$', '', account)
+          else:
+              account = None
+
           user = os.environ.get('SNOWFLAKE_USER')
           password = os.environ.get('SNOWFLAKE_PASSWORD')
           role = os.environ.get('SNOWFLAKE_ROLE')
