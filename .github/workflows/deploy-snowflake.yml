@@ -5,7 +5,6 @@ on:
     branches: [ dev ]
     paths:
       - 'Deployment/**'
-  # Allow manual runs from the Actions UI
   workflow_dispatch: {}
 
 jobs:
@@ -13,35 +12,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ Setup Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: "Debug: resolve Snowflake host and check login endpoint"
-        env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-        run: |
-          set -e
-          # sanitize account value: remove scheme, path, and any .snowflakecomputing.com suffix
-          ACCOUNT_RAW="${SNOWFLAKE_ACCOUNT:-}"
-          ACCOUNT=$(echo "$ACCOUNT_RAW" | sed -E 's#^https?://##' | cut -d/ -f1 | sed -E 's/\.snowflakecomputing\.com$//')
-          HOST="${ACCOUNT}.snowflakecomputing.com"
-          echo "Sanitized account: $ACCOUNT"
-          # Show DNS resolution
-          nslookup "$HOST" || true
-          # Check HTTP status for login endpoint (no credentials sent)
-          echo "HTTP status code for login endpoint:"
-          curl -s -o /dev/null -w "%{http_code}\n" "https://$HOST/session/v1/login-request" || true
-
+      # 3️⃣ Install Snowflake Python connector
       - name: Install Snowflake connector
         run: |
           python -m pip install --upgrade pip
           pip install snowflake-connector-python
 
+      # 4️⃣ Execute SQL files
       - name: Execute SQL files in Deployment/
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -55,30 +42,22 @@ jobs:
           set -e
           python - <<'PY'
           import os, glob
-          import re
           import snowflake.connector
 
-          account_raw = os.environ.get('SNOWFLAKE_ACCOUNT')
-          # Normalize account: strip scheme, path, and .snowflakecomputing.com suffix if present
-          if account_raw:
-              account = re.sub(r'^https?://', '', account_raw)
-              account = account.split('/')[0]
-              account = re.sub(r'\.snowflakecomputing\.com$', '', account)
-          else:
-              account = None
-
-          user = os.environ.get('SNOWFLAKE_USER')
-          password = os.environ.get('SNOWFLAKE_PASSWORD')
-          role = os.environ.get('SNOWFLAKE_ROLE')
+          # Read environment variables
+          account   = os.environ['SNOWFLAKE_ACCOUNT']   # VYVWAHU-LF69752.ap-southeast-1
+          user      = os.environ['SNOWFLAKE_USER']
+          password  = os.environ['SNOWFLAKE_PASSWORD']
+          role      = os.environ.get('SNOWFLAKE_ROLE')
           warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE')
-          database = os.environ.get('SNOWFLAKE_DATABASE')
-          schema = os.environ.get('SNOWFLAKE_SCHEMA')
+          database  = os.environ.get('SNOWFLAKE_DATABASE')
+          schema    = os.environ.get('SNOWFLAKE_SCHEMA')
 
-          if not account or not user:
-              raise SystemExit('Missing required SNOWFLAKE_ACCOUNT or SNOWFLAKE_USER secret')
+          print(f"Connecting to Snowflake account: {account}")
 
-          conn_args = dict(
+          ctx = snowflake.connector.connect(
               user=user,
+              password=password,
               account=account,
               role=role,
               warehouse=warehouse,
@@ -86,36 +65,23 @@ jobs:
               schema=schema
           )
 
-          if password:
-              conn_args['password'] = password
-
-          # Note: for private-key auth, adapt by supplying `private_key` to connect.
-
-          ctx = snowflake.connector.connect(**{k:v for k,v in conn_args.items() if v})
           cs = ctx.cursor()
           try:
               files = sorted(glob.glob('Deployment/*.sql'))
               if not files:
                   print('No SQL files found in Deployment/')
               for f in files:
-                  print('--- Executing:', f)
+                  print(f'--- Executing file: {f}')
                   with open(f, 'r', encoding='utf-8') as fh:
                       sql = fh.read()
-                  # execute multi-statement SQL if present
+
+                  # Execute multiple statements safely
                   for stmt in [s.strip() for s in sql.split(';') if s.strip()]:
-                      print('Executing statement (truncated):', stmt[:120])
+                      print('Executing:', stmt[:120])
                       cs.execute(stmt)
-                      try:
-                          for row in cs:
-                              print(row)
-                      except Exception:
-                          pass
           finally:
               cs.close()
               ctx.close()
-          PY
 
-# Notes:
-# - Store your Snowflake credentials in the repository Secrets (Settings → Secrets). Required: SNOWFLAKE_ACCOUNT and SNOWFLAKE_USER. If you use password auth, set SNOWFLAKE_PASSWORD. Optionally set SNOWFLAKE_ROLE, SNOWFLAKE_WAREHOUSE, SNOWFLAKE_DATABASE, SNOWFLAKE_SCHEMA.
-# - This workflow runs on pushes to the `dev` branch and will execute any `.sql` files in `Deployment/`.
-# - To use private-key authentication, adapt the Python step to load the private key from a secret (e.g. base64) and pass `private_key` to `snowflake.connector.connect()`.
+          print('Deployment completed successfully.')
+          PY
