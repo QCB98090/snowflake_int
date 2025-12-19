@@ -5,7 +5,7 @@ on:
     branches: [ dev ]
     paths:
       - 'Deployment/**'
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -25,9 +25,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install snowflake-connector-python
 
-      - name: Execute SQL files in Deployment/
+      - name: Execute SQL files in Deployment
         env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}   # VYVWAHU-LF69752.ap-southeast-1
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
           SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
@@ -37,8 +37,26 @@ jobs:
         run: |
           set -e
           python - <<'PY'
-          import os, glob
+          import os
+          import glob
           import snowflake.connector
+
+          def remove_comment_only_statements(sql_text: str) -> str:
+              """
+              Safely removes only full-line comments.
+              Preserves:
+                - inline comments
+                - block comments
+                - multi-statement SQL
+              """
+              cleaned_lines = []
+              for line in sql_text.splitlines():
+                  if line.strip().startswith('--'):
+                      continue
+                  cleaned_lines.append(line)
+              return '\n'.join(cleaned_lines)
+
+          print("Connecting to Snowflake...")
 
           ctx = snowflake.connector.connect(
               account=os.environ['SNOWFLAKE_ACCOUNT'],
@@ -51,20 +69,26 @@ jobs:
           )
 
           try:
-              files = sorted(glob.glob('Deployment/*.sql'))
-              if not files:
-                  print('No SQL files found')
+              sql_files = sorted(glob.glob('Deployment/*.sql'))
 
-              for f in files:
-                  print(f'--- Executing file: {f}')
-                  with open(f, 'r', encoding='utf-8') as fh:
-                      sql = fh.read()
+              if not sql_files:
+                  print("No SQL files found in Deployment/")
+                  exit(0)
 
-                  # ✅ CORRECT API: execute multi-statement SQL via connection
-                  ctx.execute_string(sql)
+              for file in sql_files:
+                  print(f"--- Executing file: {file}")
+                  with open(file, 'r', encoding='utf-8') as f:
+                      raw_sql = f.read()
+
+                  safe_sql = remove_comment_only_statements(raw_sql)
+
+                  if safe_sql.strip():
+                      ctx.execute_string(safe_sql)
+                  else:
+                      print("Skipped empty or comment-only file")
 
           finally:
               ctx.close()
 
-          print('Deployment completed successfully.')
+          print("Snowflake deployment completed successfully.")
           PY
