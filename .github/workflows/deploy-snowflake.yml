@@ -54,7 +54,16 @@ jobs:
           import os, glob
           import snowflake.connector
 
-          account = os.environ.get('SNOWFLAKE_ACCOUNT')
+            import re
+
+            account_raw = os.environ.get('SNOWFLAKE_ACCOUNT')
+            # Normalize account: strip scheme, path, and .snowflakecomputing.com suffix if present
+            if account_raw:
+              account = re.sub(r'^https?://', '', account_raw)
+              account = account.split('/')[0]
+              account = re.sub(r'\.snowflakecomputing\.com$', '', account)
+            else:
+              account = None
           user = os.environ.get('SNOWFLAKE_USER')
           password = os.environ.get('SNOWFLAKE_PASSWORD')
           role = os.environ.get('SNOWFLAKE_ROLE')
