@@ -50,7 +50,6 @@ jobs:
               schema=os.environ.get('SNOWFLAKE_SCHEMA')
           )
 
-          cs = ctx.cursor()
           try:
               files = sorted(glob.glob('Deployment/*.sql'))
               if not files:
@@ -61,11 +60,10 @@ jobs:
                   with open(f, 'r', encoding='utf-8') as fh:
                       sql = fh.read()
 
-                  # ✅ FINAL FIX: multi-statement execution
-                  cs.execute_string(sql)
+                  # ✅ CORRECT API: execute multi-statement SQL via connection
+                  ctx.execute_string(sql)
 
           finally:
-              cs.close()
               ctx.close()
 
           print('Deployment completed successfully.')
