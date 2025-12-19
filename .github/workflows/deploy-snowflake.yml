@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Debug: resolve Snowflake host and check login endpoint
+      - name: "Debug: resolve Snowflake host and check login endpoint"
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
         run: |
