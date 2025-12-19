@@ -67,9 +67,9 @@ jobs:
                   with open(file, 'r', encoding='utf-8') as f:
                       sql = f.read()
 
-                  # ✅ FINAL, CORRECT STATEMENT EXECUTION
+                  # ✅ FINAL, CORRECT LOOP
                   for statement in split_statements(StringIO(sql)):
-                      stmt = statement.strip()
+                      stmt = statement[0].strip()   # <-- FIX HERE
                       if stmt:
                           cursor.execute(stmt)
 
