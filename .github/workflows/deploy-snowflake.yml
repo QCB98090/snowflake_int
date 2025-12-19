@@ -44,8 +44,7 @@ jobs:
           import os, glob
           import snowflake.connector
 
-          # Read environment variables
-          account   = os.environ['SNOWFLAKE_ACCOUNT']   # VYVWAHU-LF69752.ap-southeast-1
+          account   = os.environ['SNOWFLAKE_ACCOUNT']
           user      = os.environ['SNOWFLAKE_USER']
           password  = os.environ['SNOWFLAKE_PASSWORD']
           role      = os.environ.get('SNOWFLAKE_ROLE')
@@ -75,10 +74,11 @@ jobs:
                   with open(f, 'r', encoding='utf-8') as fh:
                       sql = fh.read()
 
-                  # Execute multiple statements safely
-                  for stmt in [s.strip() for s in sql.split(';') if s.strip()]:
-                      print('Executing:', stmt[:120])
-                      cs.execute(stmt)
+                  # ✅ IMPORTANT FIX:
+                  # Execute the whole SQL file at once.
+                  # Snowflake handles comments and multi-statements safely.
+                  cs.execute(sql)
+
           finally:
               cs.close()
               ctx.close()
