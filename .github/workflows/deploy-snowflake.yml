@@ -41,21 +41,6 @@ jobs:
           import glob
           import snowflake.connector
 
-          def remove_comment_only_statements(sql_text: str) -> str:
-              """
-              Safely removes only full-line comments.
-              Preserves:
-                - inline comments
-                - block comments
-                - multi-statement SQL
-              """
-              cleaned_lines = []
-              for line in sql_text.splitlines():
-                  if line.strip().startswith('--'):
-                      continue
-                  cleaned_lines.append(line)
-              return '\n'.join(cleaned_lines)
-
           print("Connecting to Snowflake...")
 
           ctx = snowflake.connector.connect(
@@ -69,25 +54,23 @@ jobs:
           )
 
           try:
+              cursor = ctx.cursor()
               sql_files = sorted(glob.glob('Deployment/*.sql'))
 
               if not sql_files:
-                  print("No SQL files found in Deployment/")
+                  print("No SQL files found.")
                   exit(0)
 
               for file in sql_files:
                   print(f"--- Executing file: {file}")
-                  with open(file, 'r', encoding='utf-8') as f:
-                      raw_sql = f.read()
+                  with open(file, "r", encoding="utf-8") as f:
+                      sql = f.read()
 
-                  safe_sql = remove_comment_only_statements(raw_sql)
-
-                  if safe_sql.strip():
-                      ctx.execute_string(safe_sql)
-                  else:
-                      print("Skipped empty or comment-only file")
+                  # ✅ OFFICIAL, SAFE, PRODUCTION FIX
+                  cursor.execute(sql, multi_statement_count=0)
 
           finally:
+              cursor.close()
               ctx.close()
 
           print("Snowflake deployment completed successfully.")
