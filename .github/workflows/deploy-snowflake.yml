@@ -26,8 +26,11 @@ jobs:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
         run: |
           set -e
-          HOST="${SNOWFLAKE_ACCOUNT}.snowflakecomputing.com"
-          echo "Resolved host: $HOST"
+          # sanitize account value: remove scheme, path, and any .snowflakecomputing.com suffix
+          ACCOUNT_RAW="${SNOWFLAKE_ACCOUNT:-}"
+          ACCOUNT=$(echo "$ACCOUNT_RAW" | sed -E 's#^https?://##' | cut -d/ -f1 | sed -E 's/\.snowflakecomputing\.com$//')
+          HOST="${ACCOUNT}.snowflakecomputing.com"
+          echo "Sanitized account: $ACCOUNT"
           # Show DNS resolution
           nslookup "$HOST" || true
           # Check HTTP status for login endpoint (no credentials sent)
