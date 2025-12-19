@@ -51,57 +51,57 @@ jobs:
         run: |
           set -e
           python - <<'PY'
-    import os, glob
-    import snowflake.connector
+          import os, glob
+          import snowflake.connector
 
-    account = os.environ.get('SNOWFLAKE_ACCOUNT')
-    user = os.environ.get('SNOWFLAKE_USER')
-    password = os.environ.get('SNOWFLAKE_PASSWORD')
-    role = os.environ.get('SNOWFLAKE_ROLE')
-    warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE')
-    database = os.environ.get('SNOWFLAKE_DATABASE')
-    schema = os.environ.get('SNOWFLAKE_SCHEMA')
+          account = os.environ.get('SNOWFLAKE_ACCOUNT')
+          user = os.environ.get('SNOWFLAKE_USER')
+          password = os.environ.get('SNOWFLAKE_PASSWORD')
+          role = os.environ.get('SNOWFLAKE_ROLE')
+          warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE')
+          database = os.environ.get('SNOWFLAKE_DATABASE')
+          schema = os.environ.get('SNOWFLAKE_SCHEMA')
 
-    if not account or not user:
-      raise SystemExit('Missing required SNOWFLAKE_ACCOUNT or SNOWFLAKE_USER secret')
+          if not account or not user:
+              raise SystemExit('Missing required SNOWFLAKE_ACCOUNT or SNOWFLAKE_USER secret')
 
-    conn_args = dict(
-      user=user,
-      account=account,
-      role=role,
-      warehouse=warehouse,
-      database=database,
-      schema=schema
-    )
+          conn_args = dict(
+              user=user,
+              account=account,
+              role=role,
+              warehouse=warehouse,
+              database=database,
+              schema=schema
+          )
 
-    if password:
-      conn_args['password'] = password
+          if password:
+              conn_args['password'] = password
 
-    # Note: for private-key auth, adapt by supplying `private_key` to connect.
+          # Note: for private-key auth, adapt by supplying `private_key` to connect.
 
-    ctx = snowflake.connector.connect(**{k:v for k,v in conn_args.items() if v})
-    cs = ctx.cursor()
-    try:
-      files = sorted(glob.glob('Deployment/*.sql'))
-      if not files:
-        print('No SQL files found in Deployment/')
-      for f in files:
-        print('--- Executing:', f)
-        with open(f, 'r', encoding='utf-8') as fh:
-          sql = fh.read()
-        # execute multi-statement SQL if present
-        for stmt in [s.strip() for s in sql.split(';') if s.strip()]:
-          print('Executing statement (truncated):', stmt[:120])
-          cs.execute(stmt)
+          ctx = snowflake.connector.connect(**{k:v for k,v in conn_args.items() if v})
+          cs = ctx.cursor()
           try:
-            for row in cs:
-              print(row)
-          except Exception:
-            pass
-    finally:
-      cs.close()
-      ctx.close()
-    PY
+              files = sorted(glob.glob('Deployment/*.sql'))
+              if not files:
+                  print('No SQL files found in Deployment/')
+              for f in files:
+                  print('--- Executing:', f)
+                  with open(f, 'r', encoding='utf-8') as fh:
+                      sql = fh.read()
+                  # execute multi-statement SQL if present
+                  for stmt in [s.strip() for s in sql.split(';') if s.strip()]:
+                      print('Executing statement (truncated):', stmt[:120])
+                      cs.execute(stmt)
+                      try:
+                          for row in cs:
+                              print(row)
+                      except Exception:
+                          pass
+          finally:
+              cs.close()
+              ctx.close()
+          PY
 
 # Notes:
 # - Store your Snowflake credentials in the repository Secrets (Settings → Secrets). Required: SNOWFLAKE_ACCOUNT and SNOWFLAKE_USER. If you use password auth, set SNOWFLAKE_PASSWORD. Optionally set SNOWFLAKE_ROLE, SNOWFLAKE_WAREHOUSE, SNOWFLAKE_DATABASE, SNOWFLAKE_SCHEMA.
