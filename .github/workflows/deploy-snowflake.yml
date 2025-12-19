@@ -37,13 +37,18 @@ jobs:
         run: |
           set -e
           python - <<'PY'
-          import os, glob
+          import os
+          import glob
           from io import StringIO
+
           import snowflake.connector
           from snowflake.connector.util_text import split_statements
 
           print("Connecting to Snowflake...")
 
+          # -------------------------------
+          # Connect
+          # -------------------------------
           ctx = snowflake.connector.connect(
               account=os.environ['SNOWFLAKE_ACCOUNT'],
               user=os.environ['SNOWFLAKE_USER'],
@@ -57,21 +62,29 @@ jobs:
           cursor = ctx.cursor()
 
           try:
-              files = sorted(glob.glob('Deployment/*.sql'))
-              if not files:
-                  print("No SQL files found.")
+              sql_files = sorted(glob.glob('Deployment/*.sql'))
+
+              if not sql_files:
+                  print("No SQL files found in Deployment/")
                   exit(0)
 
-              for file in files:
+              for file in sql_files:
                   print(f"--- Executing file: {file}")
+
                   with open(file, 'r', encoding='utf-8') as f:
                       sql = f.read()
 
-                  # ✅ FINAL, CORRECT LOOP
+                  # -------------------------------
+                  # SAFE, FINAL EXECUTION LOGIC
+                  # -------------------------------
                   for statement in split_statements(StringIO(sql)):
-                      stmt = statement[0].strip()   # <-- FIX HERE
-                      if stmt:
-                          cursor.execute(stmt)
+                      stmt = statement[0].strip()   # split_statements returns a tuple
+
+                      # Skip empty or comment-only statements
+                      if not stmt or stmt.startswith('--'):
+                          continue
+
+                      cursor.execute(stmt)
 
           finally:
               cursor.close()
