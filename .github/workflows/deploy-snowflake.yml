@@ -12,8 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -25,7 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install snowflake-connector-python
 
-      - name: Execute SQL files in Deployment
+      - name: Execute SQL files
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -37,9 +36,9 @@ jobs:
         run: |
           set -e
           python - <<'PY'
-          import os
-          import glob
+          import os, glob
           import snowflake.connector
+          from snowflake.connector.util_text import split_statements
 
           print("Connecting to Snowflake...")
 
@@ -53,21 +52,23 @@ jobs:
               schema=os.environ.get('SNOWFLAKE_SCHEMA')
           )
 
-          try:
-              cursor = ctx.cursor()
-              sql_files = sorted(glob.glob('Deployment/*.sql'))
+          cursor = ctx.cursor()
 
-              if not sql_files:
+          try:
+              files = sorted(glob.glob('Deployment/*.sql'))
+              if not files:
                   print("No SQL files found.")
                   exit(0)
 
-              for file in sql_files:
+              for file in files:
                   print(f"--- Executing file: {file}")
-                  with open(file, "r", encoding="utf-8") as f:
+                  with open(file, 'r', encoding='utf-8') as f:
                       sql = f.read()
 
-                  # ✅ OFFICIAL, SAFE, PRODUCTION FIX
-                  cursor.execute(sql, multi_statement_count=0)
+                  for statement in split_statements(sql):
+                      stmt = statement.strip()
+                      if stmt:
+                          cursor.execute(stmt)
 
           finally:
               cursor.close()
