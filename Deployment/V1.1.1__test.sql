@@ -3,3 +3,4 @@ CREATE OR REPLACE TABLE test_schema.test_table (
     id INT,
     name STRING
 );
+-- ci-trigger: invoke workflow
