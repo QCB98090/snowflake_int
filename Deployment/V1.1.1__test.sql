@@ -4,3 +4,5 @@ CREATE OR REPLACE TABLE test_schema.test_table (
     name STRING
 );
 -- ci-trigger: invoke workflow
+
+-- Triggered workflow: update to cause GitHub Actions path filter
